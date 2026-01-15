@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我要出價</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <style>
+        body { font-family: sans-serif; background: #f0f2f5; padding: 20px; text-align: center; }
+        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        input { width: 100%; padding: 15px; font-size: 18px; border: 2px solid #ddd; border-radius: 10px; box-sizing: border-box; margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        button { padding: 20px; font-size: 20px; border: none; border-radius: 10px; color: white; cursor: pointer; }
+        .b-add { background: #27ae60; }
+        .b-quit { background: #95a5a6; grid-column: span 2; margin-top: 10px; font-size: 16px; }
+        .b-quit:hover { background: #7f8c8d; }
+        #msg { margin-top: 15px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>競標者姓名</h2>
+    <input type="text" id="userName" placeholder="請輸入姓名">
+    
+    <div id="actions">
+        <div class="grid">
+            <button class="b-add" onclick="bid(10)">追加 $10</button>
+            <button class="b-add" onclick="bid(50)">追加 $50</button>
+            <button class="b-add" onclick="bid(100)">追加 $100</button>
+            <button class="b-add" onclick="bid(500)">追加 $500</button>
+            <button class="b-quit" onclick="quitBid()">❌ 我要棄標</button>
+        </div>
+    </div>
+    <div id="msg"></div>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyBLKKHyGT1MHJqMq8q8tjJTBNTaIc7EKBs",
+        authDomain: "money0115.firebaseapp.com",
+        databaseURL: "https://money0115-default-rtdb.firebaseio.com",
+        projectId: "money0115",
+        storageBucket: "money0115.firebasestorage.app",
+        messagingSenderId: "486161681478",
+        appId: "1:486161681478:web:ea1107c2c5c8ebe6a5ce47",
+        measurementId: "G-WT1BGS47KH"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database().ref('auction_live');
+
+    function bid(amt) {
+        const name = document.getElementById('userName').value.trim();
+        if (!name) return alert("請輸入姓名");
+        db.child('bids').child(name).transaction(curr => (curr || 0) + amt);
+        showMsg("成功追加 $" + amt, "#27ae60");
+    }
+
+    function quitBid() {
+        const name = document.getElementById('userName').value.trim();
+        if (!name) return alert("請輸入姓名以定位您的資料");
+        if (confirm("確定要棄標嗎？您的出價紀錄將被清除。")) {
+            db.child('bids').child(name).remove();
+            showMsg("已取消您的競標資格", "#e74c3c");
+        }
+    }
+
+    function showMsg(t, color) {
+        const m = document.getElementById('msg');
+        m.innerText = t; m.style.color = color;
+        setTimeout(() => m.innerText = "", 2000);
+    }
+
+    db.child('status').on('value', (s) => {
+        if (s.val() === 'closed') {
+            document.getElementById('actions').style.display = 'none';
+            document.getElementById('msg').innerText = "競標已結束";
+        } else {
+            document.getElementById('actions').style.display = 'block';
+        }
+    });
+</script>
+</body>
+</html>
