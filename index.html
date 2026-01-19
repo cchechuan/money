@@ -2,53 +2,56 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>現場即時競標</title>
+    <title>現場即時競標 - 專業音效版</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         body { font-family: 'Microsoft JhengHei', sans-serif; background: #1a1a1a; color: white; text-align: center; margin: 0; overflow: hidden; }
-        .header { padding: 30px; background: #c0392b; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
-        .price-tag { font-size: 100px; color: #f1c40f; margin: 10px 0; font-weight: bold; text-shadow: 0 0 30px rgba(241, 196, 15, 0.8); }
-        .winner-announcement { display: none; font-size: 60px; color: #2ecc71; animation: celebrate 0.5s infinite alternate; }
+        .header { padding: 20px; background: #c0392b; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+        .price-tag { font-size: 110px; color: #f1c40f; margin: 10px 0; font-weight: bold; text-shadow: 0 0 30px rgba(241, 196, 15, 0.8); }
+        .winner-announcement { display: none; font-size: 70px; color: #2ecc71; animation: celebrate 0.5s infinite alternate; }
         @keyframes celebrate { from { transform: scale(1); } to { transform: scale(1.1); } }
         
-        .main-layout { display: flex; justify-content: space-around; padding: 40px; }
-        #qrcode-container { background: white; padding: 20px; border-radius: 15px; width: 220px; }
+        .main-layout { display: flex; justify-content: space-around; padding: 20px 40px; }
+        #qrcode-container { background: white; padding: 15px; border-radius: 15px; width: 180px; }
         #leaderboard { width: 50%; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 20px; }
-        .bid-row { display: flex; justify-content: space-between; font-size: 32px; padding: 15px; border-bottom: 1px solid #333; }
-        .rank-1 { background: #f1c40f; color: black; border-radius: 10px; font-weight: bold; }
+        .bid-row { display: flex; justify-content: space-between; font-size: 32px; padding: 12px; border-bottom: 1px solid #333; }
+        .rank-1 { background: #f1c40f; color: black; border-radius: 10px; font-weight: bold; box-shadow: 0 0 20px #f1c40f; }
 
-        .admin-panel { position: fixed; bottom: 0; width: 100%; background: #333; padding: 15px; display: flex; justify-content: center; gap: 20px; }
-        .admin-btn { padding: 10px 25px; font-size: 18px; border: none; border-radius: 5px; cursor: pointer; color: white; }
+        .admin-panel { position: fixed; bottom: 0; width: 100%; background: #333; padding: 15px; display: flex; justify-content: center; align-items: center; gap: 15px; }
+        input { padding: 10px; font-size: 16px; width: 100px; border-radius: 5px; border: none; }
+        .admin-btn { padding: 10px 20px; font-size: 16px; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; }
         .btn-new { background: #3498db; }
-        .btn-end { background: #e74c3c; font-weight: bold; }
+        .btn-end { background: #e74c3c; }
     </style>
 </head>
 <body>
 
-<div class="header">
-    <h1>現場即時競標</h1>
-</div>
+<audio id="bgm" loop src="https://assets.mixkit.co/music/preview/mixkit-tense-detective-loop-income-2469.mp3"></audio>
+<audio id="clap" src="https://assets.mixkit.co/sfx/preview/mixkit-audience-light-applause-354.mp3"></audio>
 
-<div style="margin-top:20px;">
+<div class="header"><h1>現場即時競標</h1></div>
+
+<div style="margin-top:10px;">
     <div id="statusText" style="font-size: 24px; color: #bdc3c7;">目前最高標</div>
     <div class="price-tag" id="mainPrice">$0</div>
-    <div id="mainUser" style="font-size: 40px;">等待出價中...</div>
+    <div id="mainUser" style="font-size: 40px; color: #f1c40f;">等待出價中...</div>
     <div id="winnerMsg" class="winner-announcement">🎊 恭喜得標！ 🎊</div>
 </div>
 
 <div class="main-layout">
     <div id="qrcode-container">
         <div id="qrcode"></div>
-        <p style="color: black; margin-top: 10px; font-weight: bold;">掃碼參與競標</p>
+        <p style="color: black; margin: 5px 0; font-weight: bold; font-size: 14px;">掃碼參與</p>
+        <div id="startPriceDisplay" style="color: #c0392b; font-size: 18px; font-weight: bold;">起標價: $0</div>
     </div>
-    <div id="leaderboard">
-        <div id="list"></div>
-    </div>
+    <div id="leaderboard"><div id="list"></div></div>
 </div>
 
 <div class="admin-panel">
+    <span>設定起標價：$</span>
+    <input type="number" id="basePriceInput" value="100">
     <button class="admin-btn btn-new" onclick="startNewAuction()">🔄 開啟新競標</button>
     <button class="admin-btn btn-end" onclick="finishAuction()">🔨 決標 (成交)</button>
 </div>
@@ -71,19 +74,23 @@
         const data = snapshot.val() || {};
         const bids = data.bids || {};
         const status = data.status || 'open';
+        const startPrice = data.startPrice || 0;
         const sorted = Object.entries(bids).sort((a, b) => b[1] - a[1]);
+
+        document.getElementById('startPriceDisplay').innerText = "起標價: $" + startPrice;
 
         if (status === 'closed') {
             document.getElementById('winnerMsg').style.display = 'block';
-            document.getElementById('qrcode-container').style.opacity = '0.2';
+            document.getElementById('bgm').pause();
+            document.getElementById('clap').play();
         } else {
             document.getElementById('winnerMsg').style.display = 'none';
-            document.getElementById('qrcode-container').style.opacity = '1';
         }
 
         if (sorted.length > 0) {
             document.getElementById('mainPrice').innerText = "$" + sorted[0][1];
             document.getElementById('mainUser').innerText = sorted[0][0];
+            if (status === 'open') document.getElementById('bgm').play();
         } else {
             document.getElementById('mainPrice').innerText = "$0";
             document.getElementById('mainUser').innerText = "等待出價中...";
@@ -98,22 +105,21 @@
         `).join('');
     });
 
-    // 關鍵修改：自動偵測 GitHub Pages 網址並導向同目錄下的 bid.html
-    const currentUrl = window.location.href.split('?')[0].split('#')[0];
-    const phoneUrl = currentUrl.substring(0, currentUrl.lastIndexOf('/')) + "/bid.html";
-    
-    new QRCode(document.getElementById("qrcode"), { 
-        text: phoneUrl, 
-        width: 200, 
-        height: 200,
-        correctLevel : QRCode.CorrectLevel.H
-    });
+    const currentUrl = window.location.href.split('index.html')[0] + "bid.html";
+    new QRCode(document.getElementById("qrcode"), { text: currentUrl, width: 180, height: 180 });
 
     function startNewAuction() {
-        if(confirm("確定要重啟競標嗎？")) db.set({ status: 'open', bids: {} });
+        const price = parseInt(document.getElementById('basePriceInput').value) || 0;
+        if(confirm("重啟競標？起標價將設為 $" + price)) {
+            db.set({ status: 'open', bids: {}, startPrice: price });
+            document.getElementById('bgm').currentTime = 0;
+        }
     }
+
     function finishAuction() {
-        if(confirm("確定要決標嗎？")) db.child('status').set('closed');
+        if(confirm("確定要決標嗎？")) {
+            db.child('status').set('closed');
+        }
     }
 </script>
 </body>
