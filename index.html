@@ -2,40 +2,41 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>現場即時競標 - 決標歡呼版</title>
+    <title>專業競標系統 - 煙火音效強化版</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
     <style>
         body { font-family: 'Microsoft JhengHei', sans-serif; background: #1a1a1a; color: white; text-align: center; margin: 0; overflow: hidden; }
         .header { padding: 20px; background: #c0392b; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
         .price-tag { font-size: 110px; color: #f1c40f; margin: 10px 0; font-weight: bold; text-shadow: 0 0 30px rgba(241, 196, 15, 0.8); }
-        .winner-announcement { display: none; font-size: 70px; color: #2ecc71; animation: celebrate 0.5s infinite alternate; }
+        .winner-announcement { display: none; font-size: 70px; color: #2ecc71; animation: celebrate 0.5s infinite alternate; z-index: 100; position: relative; }
+        
         @keyframes celebrate { from { transform: scale(1); } to { transform: scale(1.1); } }
         
         .main-layout { display: flex; justify-content: space-around; padding: 20px 40px; }
-        #qrcode-container { background: white; padding: 15px; border-radius: 15px; width: 180px; box-shadow: 0 0 20px rgba(255,255,255,0.2); }
+        #qrcode-container { background: white; padding: 15px; border-radius: 15px; width: 180px; }
         #leaderboard { width: 50%; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 20px; }
         .bid-row { display: flex; justify-content: space-between; font-size: 32px; padding: 12px; border-bottom: 1px solid #333; }
-        .rank-1 { background: #f1c40f; color: black; border-radius: 10px; font-weight: bold; box-shadow: 0 0 20px #f1c40f; }
+        .rank-1 { background: #f1c40f; color: black; border-radius: 10px; font-weight: bold; }
 
         .admin-panel { position: fixed; bottom: 0; width: 100%; background: #333; padding: 15px; display: flex; justify-content: center; align-items: center; gap: 15px; border-top: 2px solid #444; }
-        input { padding: 10px; font-size: 16px; width: 120px; border-radius: 5px; border: none; text-align: center; }
-        .admin-btn { padding: 10px 20px; font-size: 16px; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; transition: 0.3s; }
-        .btn-audio { background: #8e44ad; }
+        input { padding: 10px; font-size: 16px; width: 100px; border-radius: 5px; border: none; text-align: center; }
+        .admin-btn { padding: 10px 20px; font-size: 16px; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; }
+        .btn-mute { background: #7f8c8d; }
         .btn-new { background: #3498db; }
-        .btn-end { background: #e74c3c; box-shadow: 0 4px #c0392b; }
-        .btn-end:active { transform: translateY(2px); box-shadow: 0 2px #c0392b; }
+        .btn-end { background: #e74c3c; }
+        
+        /* 靜音狀態樣式 */
+        .is-muted { background: #c0392b !important; text-decoration: line-through; }
     </style>
 </head>
-<body>
+<body onclick="initAudio()">
 
-<audio id="bgm" loop preload="auto">
-    <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" type="audio/mpeg">
-</audio>
-<audio id="cheer" preload="auto">
-    <source src="https://assets.mixkit.co/sfx/preview/mixkit-stadium-crowd-light-applause-482.mp3" type="audio/mpeg">
-</audio>
+<audio id="bgm" loop preload="auto"><source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" type="audio/mpeg"></audio>
+<audio id="cheer" preload="auto"><source src="https://assets.mixkit.co/sfx/preview/mixkit-stadium-crowd-light-applause-482.mp3" type="audio/mpeg"></audio>
 
 <div class="header"><h1>現場即時競標</h1></div>
 
@@ -56,10 +57,10 @@
 </div>
 
 <div class="admin-panel">
-    <button class="admin-btn btn-audio" onclick="unlockAudio()">🔊 點擊啟用音效</button>
+    <button id="muteBtn" class="admin-btn btn-mute" onclick="toggleMute()">🔊 音樂開啟</button>
     <span>| 起標價：$</span>
     <input type="number" id="basePriceInput" value="100">
-    <button class="admin-btn btn-new" onclick="startNewAuction()">🔄 開啟新競標</button>
+    <button class="admin-btn btn-new" onclick="startNewAuction()">🔄 開始新競標</button>
     <button class="admin-btn btn-end" onclick="finishAuction()">🔨 決標 (成交)</button>
 </div>
 
@@ -77,38 +78,66 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database().ref('auction_live');
 
-    let audioUnlocked = false;
+    let isMuted = false;
+    let audioInitialized = false;
 
-    function unlockAudio() {
-        const bgm = document.getElementById('bgm');
-        const cheer = document.getElementById('cheer');
-        bgm.play().then(() => {
-            bgm.pause();
-            cheer.play(); // 預演一遍確保載入
-            cheer.pause();
-            cheer.currentTime = 0;
-            audioUnlocked = true;
-            alert("🔊 音效系統已準備就緒！");
-        }).catch(e => alert("音效啟動失敗，請再點擊一次"));
+    // 瀏覽器解鎖音效：只要點擊畫面任何地方就會觸發
+    function initAudio() {
+        if (audioInitialized) return;
+        document.getElementById('bgm').play().then(() => {
+            document.getElementById('bgm').pause();
+            audioInitialized = true;
+            console.log("Audio Unlocked");
+        }).catch(e => console.log("Waiting for interaction..."));
+    }
+
+    function toggleMute() {
+        isMuted = !isMuted;
+        const btn = document.getElementById('muteBtn');
+        if (isMuted) {
+            btn.innerText = "🔇 音樂靜音";
+            btn.classList.add('is-muted');
+            document.getElementById('bgm').pause();
+            document.getElementById('cheer').pause();
+        } else {
+            btn.innerText = "🔊 音樂開啟";
+            btn.classList.remove('is-muted');
+            // 如果正在競標中，取消靜音應恢復播放
+            db.child('status').once('value', s => {
+                if(s.val() === 'open') document.getElementById('bgm').play();
+            });
+        }
+    }
+
+    // 煙火特效函數
+    function launchFireworks() {
+        var duration = 5 * 1000;
+        var animationEnd = Date.now() + duration;
+        var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+        function randomInRange(min, max) { return Math.random() * (max - min) + min; }
+
+        var interval = setInterval(function() {
+            var timeLeft = animationEnd - Date.now();
+            if (timeLeft <= 0) return clearInterval(interval);
+            var particleCount = 50 * (timeLeft / duration);
+            confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
+            confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
+        }, 250);
     }
 
     db.on('value', (snapshot) => {
         const data = snapshot.val() || {};
         const bids = data.bids || {};
         const status = data.status || 'open';
-        const startPrice = data.startPrice || 0;
         const sorted = Object.entries(bids).sort((a, b) => b[1] - a[1]);
 
-        document.getElementById('startPriceDisplay').innerText = "起標價: $" + startPrice;
+        document.getElementById('startPriceDisplay').innerText = "起標價: $" + (data.startPrice || 0);
 
         if (status === 'closed') {
             document.getElementById('winnerMsg').style.display = 'block';
             document.getElementById('bgm').pause();
-            // 播放歡呼聲
-            if (audioUnlocked) {
-                const cheerSfx = document.getElementById('cheer');
-                if (cheerSfx.paused) cheerSfx.play();
-            }
+            if (!isMuted) document.getElementById('cheer').play();
         } else {
             document.getElementById('winnerMsg').style.display = 'none';
             document.getElementById('cheer').pause();
@@ -118,11 +147,10 @@
         if (sorted.length > 0) {
             document.getElementById('mainPrice').innerText = "$" + sorted[0][1];
             document.getElementById('mainUser').innerText = sorted[0][0];
-            if (status === 'open' && audioUnlocked) document.getElementById('bgm').play();
+            if (status === 'open' && !isMuted) document.getElementById('bgm').play();
         } else {
             document.getElementById('mainPrice').innerText = "$0";
             document.getElementById('mainUser').innerText = "等待出價中...";
-            document.getElementById('bgm').pause();
         }
 
         const listDiv = document.getElementById('list');
@@ -142,13 +170,17 @@
         const price = parseInt(document.getElementById('basePriceInput').value) || 0;
         if(confirm("確定重啟競標？起標價將設為 $" + price)) {
             db.set({ status: 'open', bids: {}, startPrice: price });
-            document.getElementById('bgm').currentTime = 0;
+            if(!isMuted) {
+                document.getElementById('bgm').currentTime = 0;
+                document.getElementById('bgm').play();
+            }
         }
     }
 
     function finishAuction() {
         if(confirm("確定要決標成交嗎？")) {
             db.child('status').set('closed');
+            launchFireworks(); // 觸發煙火
         }
     }
 </script>
