@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>專業競標系統 - 歡呼音效修正版</title>
+    <title>專業競標系統 - 音效與起標修正版</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -20,7 +20,7 @@
         .bid-row { display: flex; justify-content: space-between; font-size: 32px; padding: 12px; border-bottom: 1px solid #333; }
         .rank-1 { background: #f1c40f; color: black; border-radius: 10px; font-weight: bold; }
         .admin-panel { position: fixed; bottom: 0; width: 100%; background: #333; padding: 15px; display: flex; justify-content: center; align-items: center; gap: 15px; border-top: 2px solid #444; }
-        input { padding: 10px; font-size: 16px; width: 100px; border-radius: 5px; border: none; text-align: center; }
+        input { padding: 10px; font-size: 16px; width: 120px; border-radius: 5px; border: none; text-align: center; font-weight: bold; }
         .admin-btn { padding: 10px 20px; font-size: 16px; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; }
         .btn-mute { background: #7f8c8d; }
         .btn-new { background: #3498db; }
@@ -31,10 +31,12 @@
 <body onclick="initAudio()">
 
 <audio id="bgm" loop preload="auto">
-    <source src="https://cdn.pixabay.com/audio/2022/03/10/audio_c369e96f4c.mp3" type="audio/mpeg">
+    <source src="https://actions.google.com/音效/music/electronic_rock.mp3" type="audio/mpeg">
+    <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
 </audio>
 <audio id="cheer" preload="auto">
-    <source src="https://cdn.pixabay.com/audio/2021/08/04/audio_12b0a9960d.mp3" type="audio/mpeg">
+    <source src="https://actions.google.com/音效/human/cheer_large_crowd.mp3" type="audio/mpeg">
+    <source src="https://assets.mixkit.co/sfx/preview/mixkit-stadium-crowd-light-applause-482.mp3" type="audio/mpeg">
 </audio>
 
 <div class="header"><h1>現場即時競標</h1></div>
@@ -57,8 +59,8 @@
 
 <div class="admin-panel">
     <button id="muteBtn" class="admin-btn btn-mute" onclick="toggleMute()">🔊 音樂開啟</button>
-    <span>| 起標價：$</span>
-    <input type="number" id="basePriceInput" value="100">
+    <span>| 設定起標價：$</span>
+    <input type="number" id="basePriceInput" value="0" placeholder="請輸入金額">
     <button class="admin-btn btn-new" onclick="startNewAuction()">🔄 開始新競標</button>
     <button class="admin-btn btn-end" onclick="finishAuction()">🔨 決標 (成交)</button>
 </div>
@@ -80,32 +82,22 @@
     let isMuted = false;
     let audioInitialized = false;
 
-    // 解鎖音效權限
     function initAudio() {
         if (audioInitialized) return;
         const bgm = document.getElementById('bgm');
         const cheer = document.getElementById('cheer');
-        
-        // 嘗試同時播放並暫停兩個音效，以獲取權限
-        Promise.all([bgm.play(), cheer.play()]).then(() => {
-            bgm.pause();
-            cheer.pause();
-            audioInitialized = true;
-            console.log("音效系統就緒");
-        }).catch(e => console.log("等待點擊以啟動音效"));
+        bgm.play().then(() => { bgm.pause(); cheer.play(); cheer.pause(); audioInitialized = true; })
+        .catch(e => console.log("等待手動解鎖音效"));
     }
 
     function toggleMute() {
         isMuted = !isMuted;
         const btn = document.getElementById('muteBtn');
         const bgm = document.getElementById('bgm');
-        const cheer = document.getElementById('cheer');
-        
         if (isMuted) {
             btn.innerText = "🔇 音樂靜音";
             btn.classList.add('is-muted');
             bgm.pause();
-            cheer.pause();
         } else {
             btn.innerText = "🔊 音樂開啟";
             btn.classList.remove('is-muted');
@@ -119,9 +111,9 @@
         var interval = setInterval(function() {
             var timeLeft = animationEnd - Date.now();
             if (timeLeft <= 0) return clearInterval(interval);
-            confetti({ particleCount: 40, spread: 70, origin: { x: 0.1, y: 0.8 } });
-            confetti({ particleCount: 40, spread: 70, origin: { x: 0.9, y: 0.8 } });
-        }, 250);
+            confetti({ particleCount: 50, spread: 90, origin: { x: 0.1, y: 0.8 }, zIndex: 999 });
+            confetti({ particleCount: 50, spread: 90, origin: { x: 0.9, y: 0.8 }, zIndex: 999 });
+        }, 300);
     }
 
     db.on('value', (snapshot) => {
@@ -135,12 +127,7 @@
         if (status === 'closed') {
             document.getElementById('winnerMsg').style.display = 'block';
             document.getElementById('bgm').pause();
-            if (!isMuted) {
-                const cheer = document.getElementById('cheer');
-                cheer.currentTime = 0;
-                cheer.volume = 1.0;
-                cheer.play();
-            }
+            if (!isMuted && audioInitialized) document.getElementById('cheer').play();
         } else {
             document.getElementById('winnerMsg').style.display = 'none';
         }
@@ -148,7 +135,7 @@
         if (sorted.length > 0 && status === 'open') {
             document.getElementById('mainPrice').innerText = "$" + sorted[0][1];
             document.getElementById('mainUser').innerText = sorted[0][0];
-            if (!isMuted) document.getElementById('bgm').play();
+            if (!isMuted && audioInitialized) document.getElementById('bgm').play();
         } else if (sorted.length === 0) {
             document.getElementById('mainPrice').innerText = "$0";
             document.getElementById('mainUser').innerText = "等待出價中...";
@@ -168,15 +155,13 @@
     new QRCode(document.getElementById("qrcode"), { text: phoneUrl, width: 180, height: 180 });
 
     function startNewAuction() {
-        initAudio(); // 確保開始時再次觸發權限檢查
+        initAudio(); // 每次點擊開始時嘗試再次激活音效
         const price = parseInt(document.getElementById('basePriceInput').value) || 0;
         if(confirm("確定重啟競標？起標價將設為 $" + price)) {
             db.set({ status: 'open', bids: {}, startPrice: price });
-            if(!isMuted) {
-                const bgm = document.getElementById('bgm');
-                bgm.currentTime = 0;
-                bgm.play();
-            }
+            const bgm = document.getElementById('bgm');
+            bgm.currentTime = 0;
+            if(!isMuted && audioInitialized) bgm.play();
         }
     }
 
