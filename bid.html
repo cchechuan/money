@@ -3,25 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我要出價</title>
+    <title>我要出價 - 現場競標系統</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
-        body { font-family: sans-serif; background: #f0f2f5; padding: 15px; text-align: center; }
-        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
-        input { width: 100%; padding: 15px; font-size: 18px; border: 2px solid #ddd; border-radius: 10px; box-sizing: border-box; margin-bottom: 20px; text-align: center; }
-        .b-call { width: 100%; padding: 20px; font-size: 24px; background: #3498db; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; margin-bottom: 15px; box-shadow: 0 4px #2980b9; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        button.b-add { padding: 15px; font-size: 18px; border: none; border-radius: 10px; color: white; cursor: pointer; background: #27ae60; }
-        .b-quit { background: #95a5a6; grid-column: span 2; margin-top: 10px; padding: 12px; color: white; border: none; border-radius: 10px; }
-        #info { color: #e67e22; font-weight: bold; margin-bottom: 10px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; padding: 15px; text-align: center; transition: 0.3s; }
+        .card { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
+        .info-bar { background: #fff3e0; color: #e67e22; padding: 10px; border-radius: 10px; font-weight: bold; margin-bottom: 15px; font-size: 14px; }
+        
+        input { width: 100%; padding: 15px; font-size: 18px; border: 2px solid #ddd; border-radius: 12px; box-sizing: border-box; margin-bottom: 20px; text-align: center; outline: none; }
+        input:focus { border-color: #3498db; }
+
+        /* 喊價按鈕 (藍色大按鈕) */
+        .b-call { width: 100%; padding: 25px; font-size: 26px; background: #3498db; color: white; border: none; border-radius: 15px; cursor: pointer; font-weight: bold; margin-bottom: 15px; box-shadow: 0 6px #2980b9; transition: 0.1s; }
+        .b-call:active { box-shadow: 0 2px #2980b9; transform: translateY(4px); }
+
+        /* 快速加碼網格 */
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        button.b-add { padding: 18px; font-size: 20px; border: none; border-radius: 12px; color: white; cursor: pointer; background: #27ae60; font-weight: bold; box-shadow: 0 4px #219150; }
+        button.b-add:active { box-shadow: 0 2px #219150; transform: translateY(2px); }
+        
+        /* 棄標按鈕 */
+        .b-quit { background: #95a5a6; grid-column: span 2; margin-top: 15px; padding: 12px; color: white; border: none; border-radius: 10px; font-size: 14px; }
+        
+        #msg { margin-top: 15px; font-weight: bold; min-height: 24px; font-size: 18px; }
+        
+        /* 結標樣式 */
+        .closed-body { background: #2c3e50; }
+        .closed-card { background: #ecf0f1; border: 5px solid #f1c40f; }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <div id="info">載入中...</div>
-    <input type="text" id="userName" placeholder="請輸入您的姓名">
+<div class="card" id="mainCard">
+    <div id="info" class="info-bar">正在連接至競標系統...</div>
+    
+    <input type="text" id="userName" placeholder="👤 請輸入您的姓名">
     
     <div id="actions">
         <button class="b-call" onclick="bid(1)">喊價 (+1)</button>
@@ -30,13 +47,14 @@
             <button class="b-add" onclick="bid(10)">+$10</button>
             <button class="b-add" onclick="bid(50)">+$50</button>
             <button class="b-add" onclick="bid(100)">+$100</button>
-            <button class="b-quit" onclick="quitBid()">❌ 我要棄標</button>
+            <button class="b-quit" onclick="quitBid()">❌ 我要棄標 / 重設</button>
         </div>
     </div>
-    <div id="msg" style="margin-top:10px; font-weight:bold;"></div>
+    <div id="msg"></div>
 </div>
 
 <script>
+    // Firebase 配置 (與大螢幕端一致)
     const firebaseConfig = {
         apiKey: "AIzaSyBLKKHyGT1MHJqMq8q8tjJTBNTaIc7EKBs",
         authDomain: "money0115.firebaseapp.com",
@@ -51,41 +69,85 @@
     const db = firebase.database().ref('auction_live');
 
     let currentStartPrice = 0;
-    let hasAnyBid = false;
+    let bidsList = {};
 
+    // 監聽後台數據
     db.on('value', (snapshot) => {
         const data = snapshot.val() || {};
         currentStartPrice = data.startPrice || 0;
-        const bids = data.bids || {};
-        hasAnyBid = Object.keys(bids).length > 0;
-        
-        document.getElementById('info').innerText = hasAnyBid ? "競標進行中" : "起標價為: $" + currentStartPrice;
+        bidsList = data.bids || {};
+        const status = data.status || 'open';
+        const hasAnyBid = Object.keys(bidsList).length > 0;
 
-        if (data.status === 'closed') {
+        // 更新狀態顯示
+        const infoDiv = document.getElementById('info');
+        if (status === 'closed') {
+            document.body.classList.add('closed-body');
+            document.getElementById('mainCard').classList.add('closed-card');
             document.getElementById('actions').style.display = 'none';
-            document.getElementById('msg').innerText = "競標已結束";
+            document.getElementById('msg').innerText = "🔨 競標已結束！請查看大螢幕";
+            document.getElementById('msg').style.color = "#c0392b";
+            infoDiv.innerText = "本輪競標結束";
+            infoDiv.style.background = "#bdc3c7";
+            infoDiv.style.color = "#2c3e50";
         } else {
+            document.body.classList.remove('closed-body');
+            document.getElementById('mainCard').classList.remove('closed-card');
             document.getElementById('actions').style.display = 'block';
+            infoDiv.style.background = "#fff3e0";
+            infoDiv.style.color = "#e67e22";
+            if (!hasAnyBid) {
+                infoDiv.innerText = "🏆 起標價為：$" + currentStartPrice;
+            } else {
+                // 找出目前最高標
+                const maxBid = Math.max(...Object.values(bidsList));
+                infoDiv.innerText = "🔥 目前最高價：$" + maxBid;
+            }
         }
     });
 
+    // 出價函數
     function bid(amt) {
-        const name = document.getElementById('userName').value.trim();
-        if (!name) return alert("請輸入姓名");
+        const nameInput = document.getElementById('userName');
+        const name = nameInput.value.trim();
+        
+        if (!name) {
+            nameInput.style.borderColor = "red";
+            showMsg("⚠️ 請輸入姓名後再出價", "red");
+            return;
+        }
+        nameInput.style.borderColor = "#ddd";
 
+        // 交易處理：確保多人同時出價不會算錯
         db.child('bids').child(name).transaction((curr) => {
+            const hasAnyBid = Object.keys(bidsList).length > 0;
             if (!hasAnyBid) {
-                // 如果是第一個出價的人，直接從起標價開始
+                // 如果是第一位出價者：起標價 + 喊價
                 return currentStartPrice + amt;
             } else {
+                // 如果已有出價：原價 + 喊價
                 return (curr || 0) + amt;
             }
         });
+        showMsg("✅ 成功出價 +$" + amt, "#27ae60");
     }
 
+    // 棄標函數
     function quitBid() {
         const name = document.getElementById('userName').value.trim();
-        if (name && confirm("確定棄標？")) db.child('bids').child(name).remove();
+        if (!name) return alert("請輸入您的姓名");
+        if (confirm("確定要棄標嗎？您的出價將被移除。")) {
+            db.child('bids').child(name).remove();
+            showMsg("已取消您的出價", "#7f8c8d");
+        }
+    }
+
+    // 訊息顯示
+    function showMsg(t, color) {
+        const m = document.getElementById('msg');
+        m.innerText = t;
+        m.style.color = color;
+        setTimeout(() => { if(m.innerText === t) m.innerText = ""; }, 2000);
     }
 </script>
 </body>
