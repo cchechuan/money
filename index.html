@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>現場即時競標 - 專業音效版</title>
+    <title>現場即時競標 - 決標歡呼版</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -24,8 +24,8 @@
         .admin-btn { padding: 10px 20px; font-size: 16px; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; transition: 0.3s; }
         .btn-audio { background: #8e44ad; }
         .btn-new { background: #3498db; }
-        .btn-end { background: #e74c3c; }
-        .btn-audio:active { transform: scale(0.95); }
+        .btn-end { background: #e74c3c; box-shadow: 0 4px #c0392b; }
+        .btn-end:active { transform: translateY(2px); box-shadow: 0 2px #c0392b; }
     </style>
 </head>
 <body>
@@ -33,8 +33,8 @@
 <audio id="bgm" loop preload="auto">
     <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" type="audio/mpeg">
 </audio>
-<audio id="clap" preload="auto">
-    <source src="https://assets.mixkit.co/sfx/preview/mixkit-audience-light-applause-354.mp3" type="audio/mpeg">
+<audio id="cheer" preload="auto">
+    <source src="https://assets.mixkit.co/sfx/preview/mixkit-stadium-crowd-light-applause-482.mp3" type="audio/mpeg">
 </audio>
 
 <div class="header"><h1>現場即時競標</h1></div>
@@ -52,9 +52,7 @@
         <p style="color: black; margin: 10px 0 5px 0; font-weight: bold; font-size: 14px;">掃碼參與競標</p>
         <div id="startPriceDisplay" style="color: #c0392b; font-size: 18px; font-weight: bold;">起標價: $0</div>
     </div>
-    <div id="leaderboard">
-        <div id="list"></div>
-    </div>
+    <div id="leaderboard"><div id="list"></div></div>
 </div>
 
 <div class="admin-panel">
@@ -66,7 +64,6 @@
 </div>
 
 <script>
-    // Firebase 配置
     const firebaseConfig = {
         apiKey: "AIzaSyBLKKHyGT1MHJqMq8q8tjJTBNTaIc7EKBs",
         authDomain: "money0115.firebaseapp.com",
@@ -82,18 +79,19 @@
 
     let audioUnlocked = false;
 
-    // 音效解鎖函數 (解決瀏覽器自動播放限制)
     function unlockAudio() {
         const bgm = document.getElementById('bgm');
-        const clap = document.getElementById('clap');
+        const cheer = document.getElementById('cheer');
         bgm.play().then(() => {
             bgm.pause();
+            cheer.play(); // 預演一遍確保載入
+            cheer.pause();
+            cheer.currentTime = 0;
             audioUnlocked = true;
-            alert("音效系統已就緒！開始競標後將自動播放音樂。");
-        }).catch(e => console.log("音效解鎖失敗:", e));
+            alert("🔊 音效系統已準備就緒！");
+        }).catch(e => alert("音效啟動失敗，請再點擊一次"));
     }
 
-    // 監聽 Firebase 數據
     db.on('value', (snapshot) => {
         const data = snapshot.val() || {};
         const bids = data.bids || {};
@@ -103,32 +101,30 @@
 
         document.getElementById('startPriceDisplay').innerText = "起標價: $" + startPrice;
 
-        // 決標處理
         if (status === 'closed') {
             document.getElementById('winnerMsg').style.display = 'block';
             document.getElementById('bgm').pause();
-            if (audioUnlocked) document.getElementById('clap').play();
-            document.getElementById('qrcode-container').style.opacity = '0.3';
+            // 播放歡呼聲
+            if (audioUnlocked) {
+                const cheerSfx = document.getElementById('cheer');
+                if (cheerSfx.paused) cheerSfx.play();
+            }
         } else {
             document.getElementById('winnerMsg').style.display = 'none';
-            document.getElementById('qrcode-container').style.opacity = '1';
+            document.getElementById('cheer').pause();
+            document.getElementById('cheer').currentTime = 0;
         }
 
-        // 更新畫面數字
         if (sorted.length > 0) {
             document.getElementById('mainPrice').innerText = "$" + sorted[0][1];
             document.getElementById('mainUser').innerText = sorted[0][0];
-            // 競標中且有人出價，開啟背景音樂
-            if (status === 'open' && audioUnlocked) {
-                document.getElementById('bgm').play();
-            }
+            if (status === 'open' && audioUnlocked) document.getElementById('bgm').play();
         } else {
             document.getElementById('mainPrice').innerText = "$0";
             document.getElementById('mainUser').innerText = "等待出價中...";
             document.getElementById('bgm').pause();
         }
 
-        // 更新清單
         const listDiv = document.getElementById('list');
         listDiv.innerHTML = sorted.slice(0, 5).map((item, index) => `
             <div class="bid-row ${index === 0 ? 'rank-1' : ''}">
@@ -138,30 +134,18 @@
         `).join('');
     });
 
-    // QR Code 產生邏輯 (相對路徑)
     const currentUrl = window.location.href.split('?')[0].split('#')[0];
     const phoneUrl = currentUrl.substring(0, currentUrl.lastIndexOf('/')) + "/bid.html";
-    new QRCode(document.getElementById("qrcode"), { 
-        text: phoneUrl, 
-        width: 180, 
-        height: 180,
-        correctLevel : QRCode.CorrectLevel.H
-    });
+    new QRCode(document.getElementById("qrcode"), { text: phoneUrl, width: 180, height: 180 });
 
-    // 管理按鈕：開始新競標
     function startNewAuction() {
         const price = parseInt(document.getElementById('basePriceInput').value) || 0;
         if(confirm("確定重啟競標？起標價將設為 $" + price)) {
-            db.set({ 
-                status: 'open', 
-                bids: {}, 
-                startPrice: price 
-            });
+            db.set({ status: 'open', bids: {}, startPrice: price });
             document.getElementById('bgm').currentTime = 0;
         }
     }
 
-    // 管理按鈕：決標
     function finishAuction() {
         if(confirm("確定要決標成交嗎？")) {
             db.child('status').set('closed');
