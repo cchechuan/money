@@ -40,7 +40,7 @@
 <body>
 
 <div class="card" id="mainCard">
-    <div id="info" class="info-bar">🏆 起標價載入中...</div>
+    <div id="info" class="info-bar">🏆 載入中...</div>
     <input type="text" id="userName" placeholder="👤 請輸入您的姓名">
     
     <div id="actions">
@@ -50,7 +50,7 @@
             <button class="b-add" onclick="bid(10)">+$10</button>
             <button class="b-add" onclick="bid(50)">+$50</button>
             <button class="b-add" onclick="bid(100)">+$100</button>
-            <button class="b-quit" onclick="quitBid()">❌ 棄標 / 清除</button>
+            <button class="b-quit" onclick="quitBid()">❌ 棄標 / 重設</button>
         </div>
     </div>
     <div id="msg" style="margin-top:15px; font-weight:bold;"></div>
@@ -60,7 +60,7 @@
     <div class="result-title" id="resTitle"></div>
     <div style="font-size: 20px;" id="resSub"></div>
     <div class="result-price" id="resPrice"></div>
-    <button class="result-btn" onclick="location.reload()">確定</button>
+    <button class="result-btn" onclick="closeOverlay()">回主畫面</button>
 </div>
 
 <script>
@@ -80,6 +80,14 @@
     let currentStartPrice = 0;
     let bidsList = {};
 
+    // 頁面載入時檢查是否有存過的姓名 (sessionStorage)
+    window.onload = function() {
+        const savedName = sessionStorage.getItem('auction_user_name');
+        if (savedName) {
+            document.getElementById('userName').value = savedName;
+        }
+    };
+
     db.on('value', (snapshot) => {
         const data = snapshot.val() || {};
         currentStartPrice = data.startPrice || 0;
@@ -87,7 +95,6 @@
         const status = data.status || 'open';
         const myName = document.getElementById('userName').value.trim();
 
-        // 判斷決標
         if (status === 'closed') {
             showResult(myName, bidsList);
         } else {
@@ -113,7 +120,6 @@
         const resSub = document.getElementById('resSub');
         const resPrice = document.getElementById('resPrice');
 
-        // 找出最高標者
         const sorted = Object.entries(bids).sort((a, b) => b[1] - a[1]);
         const winnerName = sorted.length > 0 ? sorted[0][0] : null;
         const finalPrice = sorted.length > 0 ? sorted[0][1] : 0;
@@ -121,13 +127,11 @@
         overlay.style.display = 'flex';
         
         if (winnerName && myName === winnerName) {
-            // 得標者
             overlay.className = 'win-bg';
             resTitle.innerText = "🎊 恭喜得標！";
             resSub.innerText = "您以最高價成功競標";
             resPrice.innerText = "$" + finalPrice;
         } else {
-            // 未得標者
             overlay.className = 'lose-bg';
             resTitle.innerText = "🔨 競標已結束";
             resSub.innerText = winnerName ? "得標者為 " + winnerName : "本次無人出價";
@@ -135,9 +139,17 @@
         }
     }
 
+    function closeOverlay() {
+        document.getElementById('resultOverlay').style.display = 'none';
+    }
+
     function bid(amt) {
-        const name = document.getElementById('userName').value.trim();
+        const nameInput = document.getElementById('userName');
+        const name = nameInput.value.trim();
         if (!name) return alert("請先輸入姓名再出價！");
+
+        // 將姓名儲存到 sessionStorage
+        sessionStorage.setItem('auction_user_name', name);
 
         db.child('bids').child(name).transaction((curr) => {
             const hasAnyBid = Object.keys(bidsList).length > 0;
@@ -147,7 +159,11 @@
 
     function quitBid() {
         const name = document.getElementById('userName').value.trim();
-        if (name && confirm("確定棄標？")) db.child('bids').child(name).remove();
+        if (name && confirm("確定棄標？將清除您的紀錄並重設姓名")) {
+            db.child('bids').child(name).remove();
+            sessionStorage.removeItem('auction_user_name'); // 清除記憶
+            document.getElementById('userName').value = ""; // 清空欄位
+        }
     }
 </script>
 </body>
