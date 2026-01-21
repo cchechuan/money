@@ -13,16 +13,20 @@
         
         input { width: 100%; padding: 15px; font-size: 18px; border: 2px solid #ddd; border-radius: 12px; box-sizing: border-box; margin-bottom: 20px; text-align: center; }
 
-        /* 按鈕樣式 */
         .b-call { width: 100%; padding: 20px; font-size: 26px; background: #3498db; color: white; border: none; border-radius: 15px; cursor: pointer; font-weight: bold; margin-bottom: 15px; box-shadow: 0 6px #2980b9; transition: 0.2s; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         button.b-add { padding: 18px; font-size: 20px; border: none; border-radius: 12px; color: white; cursor: pointer; background: #27ae60; font-weight: bold; box-shadow: 0 4px #219150; transition: 0.2s; }
         .b-quit { background: #95a5a6; grid-column: span 2; margin-top: 15px; padding: 12px; color: white; border: none; border-radius: 10px; }
 
-        /* 鎖定狀態：變灰且無法點擊 */
-        .btn-locked { background: #bdc3c7 !important; box-shadow: none !important; opacity: 0.6; cursor: not-allowed !important; transform: none !important; }
+        /* 鎖定狀態：變灰且禁止觸摸 */
+        .btn-locked { 
+            background: #bdc3c7 !important; 
+            box-shadow: none !important; 
+            opacity: 0.5; 
+            pointer-events: none !important; /* 物理性禁止點擊 */
+            cursor: not-allowed !important;
+        }
         
-        /* 決標遮罩 */
         #resultOverlay {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             z-index: 999; flex-direction: column; justify-content: center; align-items: center;
@@ -40,17 +44,17 @@
 <body>
 
 <div class="card" id="mainCard">
-    <div id="info" class="info-bar">🏆 載入中...</div>
+    <div id="info" class="info-bar">🏆 系統連線中...</div>
     <input type="text" id="userName" placeholder="👤 請輸入您的姓名">
     
     <div id="actions">
-        <button class="b-call btn-bid" onclick="bid(1)">喊價 (+1)</button>
+        <button id="btn-call" class="b-call btn-bid" onclick="bid(1)">喊價 (+1)</button>
         <div class="grid">
             <button class="b-add btn-bid" onclick="bid(5)">+$5</button>
             <button class="b-add btn-bid" onclick="bid(10)">+$10</button>
             <button class="b-add btn-bid" onclick="bid(50)">+$50</button>
             <button class="b-add btn-bid" onclick="bid(100)">+$100</button>
-            <button class="b-quit" onclick="quitBid()">❌ 棄標 / 重設</button>
+            <button id="btn-quit" class="b-quit" onclick="quitBid()">❌ 棄標 / 重設</button>
         </div>
     </div>
     <div id="msg" style="margin-top:15px; font-weight:bold;"></div>
@@ -60,7 +64,7 @@
     <div class="result-title" id="resTitle"></div>
     <div style="font-size: 20px;" id="resSub"></div>
     <div class="result-price" id="resPrice"></div>
-    <button class="result-btn" onclick="closeOverlay()">確定</button>
+    <button class="result-btn" onclick="closeOverlay()">關閉</button>
 </div>
 
 <script>
@@ -79,7 +83,7 @@
 
     let currentStartPrice = 0;
     let bidsList = {};
-    let isAuctionClosed = false; // 新增鎖定變數
+    let isAuctionClosed = false;
 
     window.onload = function() {
         const savedName = sessionStorage.getItem('auction_user_name');
@@ -95,24 +99,25 @@
 
         if (status === 'closed') {
             isAuctionClosed = true;
-            toggleButtons(true); // 鎖定按鈕
+            toggleLock(true);
             showResult(myName, bidsList);
         } else {
             isAuctionClosed = false;
-            toggleButtons(false); // 解鎖按鈕
+            toggleLock(false);
             document.getElementById('resultOverlay').style.display = 'none';
             updateUI(data);
         }
     });
 
-    // 切換按鈕鎖定狀態的視覺效果
-    function toggleButtons(locked) {
-        const buttons = document.querySelectorAll('.btn-bid');
+    function toggleLock(locked) {
+        const buttons = document.querySelectorAll('.btn-bid, .b-quit');
         buttons.forEach(btn => {
             if (locked) {
                 btn.classList.add('btn-locked');
+                btn.disabled = true; // 雙重保險
             } else {
                 btn.classList.remove('btn-locked');
+                btn.disabled = false;
             }
         });
     }
@@ -121,10 +126,10 @@
         const hasAnyBid = Object.keys(bidsList).length > 0;
         const infoDiv = document.getElementById('info');
         if (!hasAnyBid) {
-            infoDiv.innerText = "🏆 起標價為：$" + currentStartPrice;
+            infoDiv.innerText = "🏆 起標價：$" + currentStartPrice;
         } else {
             const maxBid = Math.max(...Object.values(bidsList));
-            infoDiv.innerText = "🔥 目前最高價：$" + maxBid;
+            infoDiv.innerText = "🔥 目前最高標：$" + maxBid;
         }
     }
 
@@ -138,12 +143,12 @@
         if (winnerName && myName === winnerName) {
             overlay.className = 'win-bg';
             document.getElementById('resTitle').innerText = "🎊 恭喜得標！";
-            document.getElementById('resSub').innerText = "您是本次競標的贏家";
+            document.getElementById('resSub').innerText = "您是最終得標者";
             document.getElementById('resPrice').innerText = "$" + finalPrice;
         } else {
             overlay.className = 'lose-bg';
             document.getElementById('resTitle').innerText = "🔨 競標結束";
-            document.getElementById('resSub').innerText = winnerName ? "得標者為 " + winnerName : "本次無人成交";
+            document.getElementById('resSub').innerText = winnerName ? "得標者：" + winnerName : "本次未成交";
             document.getElementById('resPrice').innerText = winnerName ? "成交價 $" + finalPrice : "";
         }
     }
@@ -153,26 +158,27 @@
     }
 
     function bid(amt) {
-        // 如果已經決標，禁止執行
-        if (isAuctionClosed) {
-            alert("競標已結束，請等待下一場開始！");
-            return;
-        }
+        // 第一層攔截：如果狀態已鎖定，絕對不執行
+        if (isAuctionClosed) return;
 
         const nameInput = document.getElementById('userName');
         const name = nameInput.value.trim();
-        if (!name) return alert("請先輸入姓名！");
+        if (!name) return alert("請輸入姓名！");
 
         sessionStorage.setItem('auction_user_name', name);
 
+        // 第二層：使用 Firebase Transaction 確保原子性操作
         db.child('bids').child(name).transaction((curr) => {
+            // 第三層：在寫入數據前再次檢查競標是否已結束
+            if (isAuctionClosed) return; 
+            
             const hasAnyBid = Object.keys(bidsList).length > 0;
             return (!hasAnyBid) ? (currentStartPrice + amt) : ((curr || 0) + amt);
         });
     }
 
     function quitBid() {
-        if (isAuctionClosed) return; // 決標後不可棄標
+        if (isAuctionClosed) return;
         const name = document.getElementById('userName').value.trim();
         if (name && confirm("確定棄標？")) {
             db.child('bids').child(name).remove();
