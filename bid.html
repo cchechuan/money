@@ -13,15 +13,16 @@
         
         input { width: 100%; padding: 15px; font-size: 18px; border: 2px solid #ddd; border-radius: 12px; box-sizing: border-box; margin-bottom: 20px; text-align: center; }
 
-        .b-call { width: 100%; padding: 20px; font-size: 26px; background: #3498db; color: white; border: none; border-radius: 15px; cursor: pointer; font-weight: bold; margin-bottom: 15px; box-shadow: 0 6px #2980b9; }
-        .b-call:active { transform: translateY(4px); box-shadow: 0 2px #2980b9; }
-
+        /* 按鈕樣式 */
+        .b-call { width: 100%; padding: 20px; font-size: 26px; background: #3498db; color: white; border: none; border-radius: 15px; cursor: pointer; font-weight: bold; margin-bottom: 15px; box-shadow: 0 6px #2980b9; transition: 0.2s; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        button.b-add { padding: 18px; font-size: 20px; border: none; border-radius: 12px; color: white; cursor: pointer; background: #27ae60; font-weight: bold; box-shadow: 0 4px #219150; }
-        
+        button.b-add { padding: 18px; font-size: 20px; border: none; border-radius: 12px; color: white; cursor: pointer; background: #27ae60; font-weight: bold; box-shadow: 0 4px #219150; transition: 0.2s; }
         .b-quit { background: #95a5a6; grid-column: span 2; margin-top: 15px; padding: 12px; color: white; border: none; border-radius: 10px; }
+
+        /* 鎖定狀態：變灰且無法點擊 */
+        .btn-locked { background: #bdc3c7 !important; box-shadow: none !important; opacity: 0.6; cursor: not-allowed !important; transform: none !important; }
         
-        /* 決標結果全螢幕遮罩 */
+        /* 決標遮罩 */
         #resultOverlay {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             z-index: 999; flex-direction: column; justify-content: center; align-items: center;
@@ -29,8 +30,7 @@
         }
         .win-bg { background: linear-gradient(135deg, #f1c40f, #e67e22); animation: flash 0.5s infinite alternate; }
         .lose-bg { background: linear-gradient(135deg, #2c3e50, #000); }
-        
-        .result-title { font-size: 40px; margin-bottom: 10px; text-shadow: 2px 2px 10px rgba(0,0,0,0.5); }
+        .result-title { font-size: 40px; margin-bottom: 10px; }
         .result-price { font-size: 60px; color: #fff; margin: 20px 0; }
         .result-btn { background: white; color: #333; padding: 15px 40px; border-radius: 30px; border: none; font-size: 18px; margin-top: 30px; }
 
@@ -44,12 +44,12 @@
     <input type="text" id="userName" placeholder="👤 請輸入您的姓名">
     
     <div id="actions">
-        <button class="b-call" onclick="bid(1)">喊價 (+1)</button>
+        <button class="b-call btn-bid" onclick="bid(1)">喊價 (+1)</button>
         <div class="grid">
-            <button class="b-add" onclick="bid(5)">+$5</button>
-            <button class="b-add" onclick="bid(10)">+$10</button>
-            <button class="b-add" onclick="bid(50)">+$50</button>
-            <button class="b-add" onclick="bid(100)">+$100</button>
+            <button class="b-add btn-bid" onclick="bid(5)">+$5</button>
+            <button class="b-add btn-bid" onclick="bid(10)">+$10</button>
+            <button class="b-add btn-bid" onclick="bid(50)">+$50</button>
+            <button class="b-add btn-bid" onclick="bid(100)">+$100</button>
             <button class="b-quit" onclick="quitBid()">❌ 棄標 / 重設</button>
         </div>
     </div>
@@ -60,7 +60,7 @@
     <div class="result-title" id="resTitle"></div>
     <div style="font-size: 20px;" id="resSub"></div>
     <div class="result-price" id="resPrice"></div>
-    <button class="result-btn" onclick="closeOverlay()">回主畫面</button>
+    <button class="result-btn" onclick="closeOverlay()">確定</button>
 </div>
 
 <script>
@@ -79,13 +79,11 @@
 
     let currentStartPrice = 0;
     let bidsList = {};
+    let isAuctionClosed = false; // 新增鎖定變數
 
-    // 頁面載入時檢查是否有存過的姓名 (sessionStorage)
     window.onload = function() {
         const savedName = sessionStorage.getItem('auction_user_name');
-        if (savedName) {
-            document.getElementById('userName').value = savedName;
-        }
+        if (savedName) document.getElementById('userName').value = savedName;
     };
 
     db.on('value', (snapshot) => {
@@ -96,12 +94,28 @@
         const myName = document.getElementById('userName').value.trim();
 
         if (status === 'closed') {
+            isAuctionClosed = true;
+            toggleButtons(true); // 鎖定按鈕
             showResult(myName, bidsList);
         } else {
+            isAuctionClosed = false;
+            toggleButtons(false); // 解鎖按鈕
             document.getElementById('resultOverlay').style.display = 'none';
             updateUI(data);
         }
     });
+
+    // 切換按鈕鎖定狀態的視覺效果
+    function toggleButtons(locked) {
+        const buttons = document.querySelectorAll('.btn-bid');
+        buttons.forEach(btn => {
+            if (locked) {
+                btn.classList.add('btn-locked');
+            } else {
+                btn.classList.remove('btn-locked');
+            }
+        });
+    }
 
     function updateUI(data) {
         const hasAnyBid = Object.keys(bidsList).length > 0;
@@ -116,26 +130,21 @@
 
     function showResult(myName, bids) {
         const overlay = document.getElementById('resultOverlay');
-        const resTitle = document.getElementById('resTitle');
-        const resSub = document.getElementById('resSub');
-        const resPrice = document.getElementById('resPrice');
-
         const sorted = Object.entries(bids).sort((a, b) => b[1] - a[1]);
         const winnerName = sorted.length > 0 ? sorted[0][0] : null;
         const finalPrice = sorted.length > 0 ? sorted[0][1] : 0;
 
         overlay.style.display = 'flex';
-        
         if (winnerName && myName === winnerName) {
             overlay.className = 'win-bg';
-            resTitle.innerText = "🎊 恭喜得標！";
-            resSub.innerText = "您以最高價成功競標";
-            resPrice.innerText = "$" + finalPrice;
+            document.getElementById('resTitle').innerText = "🎊 恭喜得標！";
+            document.getElementById('resSub').innerText = "您是本次競標的贏家";
+            document.getElementById('resPrice').innerText = "$" + finalPrice;
         } else {
             overlay.className = 'lose-bg';
-            resTitle.innerText = "🔨 競標已結束";
-            resSub.innerText = winnerName ? "得標者為 " + winnerName : "本次無人出價";
-            resPrice.innerText = winnerName ? "成交價 $" + finalPrice : "";
+            document.getElementById('resTitle').innerText = "🔨 競標結束";
+            document.getElementById('resSub').innerText = winnerName ? "得標者為 " + winnerName : "本次無人成交";
+            document.getElementById('resPrice').innerText = winnerName ? "成交價 $" + finalPrice : "";
         }
     }
 
@@ -144,11 +153,16 @@
     }
 
     function bid(amt) {
+        // 如果已經決標，禁止執行
+        if (isAuctionClosed) {
+            alert("競標已結束，請等待下一場開始！");
+            return;
+        }
+
         const nameInput = document.getElementById('userName');
         const name = nameInput.value.trim();
-        if (!name) return alert("請先輸入姓名再出價！");
+        if (!name) return alert("請先輸入姓名！");
 
-        // 將姓名儲存到 sessionStorage
         sessionStorage.setItem('auction_user_name', name);
 
         db.child('bids').child(name).transaction((curr) => {
@@ -158,11 +172,12 @@
     }
 
     function quitBid() {
+        if (isAuctionClosed) return; // 決標後不可棄標
         const name = document.getElementById('userName').value.trim();
-        if (name && confirm("確定棄標？將清除您的紀錄並重設姓名")) {
+        if (name && confirm("確定棄標？")) {
             db.child('bids').child(name).remove();
-            sessionStorage.removeItem('auction_user_name'); // 清除記憶
-            document.getElementById('userName').value = ""; // 清空欄位
+            sessionStorage.removeItem('auction_user_name');
+            document.getElementById('userName').value = "";
         }
     }
 </script>
