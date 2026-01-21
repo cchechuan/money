@@ -8,9 +8,31 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; padding: 15px; text-align: center; margin: 0; }
-        .card { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
-        .info-bar { background: #fff3e0; color: #e67e22; padding: 10px; border-radius: 10px; font-weight: bold; margin-bottom: 15px; font-size: 14px; }
+        .card { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); max-width: 400px; margin: auto; overflow: hidden; }
         
+        /* 醒目的金額顯示區塊 */
+        .info-bar { 
+            background: #2c3e50; 
+            color: #f1c40f; 
+            padding: 20px 10px; 
+            border-radius: 15px; 
+            margin-bottom: 20px; 
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
+        .info-label { font-size: 18px; color: #ecf0f1; margin-bottom: 5px; }
+        .info-price { 
+            font-size: 42px; 
+            font-weight: 900; 
+            text-shadow: 0 0 15px rgba(241, 196, 15, 0.5); 
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
         input { width: 100%; padding: 15px; font-size: 18px; border: 2px solid #ddd; border-radius: 12px; box-sizing: border-box; margin-bottom: 20px; text-align: center; }
 
         .b-call { width: 100%; padding: 20px; font-size: 26px; background: #3498db; color: white; border: none; border-radius: 15px; cursor: pointer; font-weight: bold; margin-bottom: 15px; box-shadow: 0 6px #2980b9; transition: 0.2s; }
@@ -18,14 +40,7 @@
         button.b-add { padding: 18px; font-size: 20px; border: none; border-radius: 12px; color: white; cursor: pointer; background: #27ae60; font-weight: bold; box-shadow: 0 4px #219150; transition: 0.2s; }
         .b-quit { background: #95a5a6; grid-column: span 2; margin-top: 15px; padding: 12px; color: white; border: none; border-radius: 10px; }
 
-        /* 鎖定狀態：變灰且禁止觸摸 */
-        .btn-locked { 
-            background: #bdc3c7 !important; 
-            box-shadow: none !important; 
-            opacity: 0.5; 
-            pointer-events: none !important; /* 物理性禁止點擊 */
-            cursor: not-allowed !important;
-        }
+        .btn-locked { background: #bdc3c7 !important; box-shadow: none !important; opacity: 0.5; pointer-events: none !important; }
         
         #resultOverlay {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -44,7 +59,11 @@
 <body>
 
 <div class="card" id="mainCard">
-    <div id="info" class="info-bar">🏆 系統連線中...</div>
+    <div class="info-bar">
+        <div id="infoLabel" class="info-label">🏆 起標價</div>
+        <div id="infoPrice" class="info-price">$0</div>
+    </div>
+    
     <input type="text" id="userName" placeholder="👤 請輸入您的姓名">
     
     <div id="actions">
@@ -114,7 +133,7 @@
         buttons.forEach(btn => {
             if (locked) {
                 btn.classList.add('btn-locked');
-                btn.disabled = true; // 雙重保險
+                btn.disabled = true;
             } else {
                 btn.classList.remove('btn-locked');
                 btn.disabled = false;
@@ -124,12 +143,20 @@
 
     function updateUI(data) {
         const hasAnyBid = Object.keys(bidsList).length > 0;
-        const infoDiv = document.getElementById('info');
+        const label = document.getElementById('infoLabel');
+        const price = document.getElementById('infoPrice');
+        
         if (!hasAnyBid) {
-            infoDiv.innerText = "🏆 起標價：$" + currentStartPrice;
+            label.innerText = "🏆 起標金額";
+            label.style.color = "#ecf0f1";
+            price.innerText = "$" + currentStartPrice;
+            price.style.color = "#f1c40f";
         } else {
             const maxBid = Math.max(...Object.values(bidsList));
-            infoDiv.innerText = "🔥 目前最高標：$" + maxBid;
+            label.innerText = "🔥 目前最高價";
+            label.style.color = "#ff7675";
+            price.innerText = "$" + maxBid;
+            price.style.color = "#fab1a0";
         }
     }
 
@@ -158,20 +185,14 @@
     }
 
     function bid(amt) {
-        // 第一層攔截：如果狀態已鎖定，絕對不執行
         if (isAuctionClosed) return;
-
         const nameInput = document.getElementById('userName');
         const name = nameInput.value.trim();
         if (!name) return alert("請輸入姓名！");
-
         sessionStorage.setItem('auction_user_name', name);
 
-        // 第二層：使用 Firebase Transaction 確保原子性操作
         db.child('bids').child(name).transaction((curr) => {
-            // 第三層：在寫入數據前再次檢查競標是否已結束
             if (isAuctionClosed) return; 
-            
             const hasAnyBid = Object.keys(bidsList).length > 0;
             return (!hasAnyBid) ? (currentStartPrice + amt) : ((curr || 0) + amt);
         });
