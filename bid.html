@@ -10,49 +10,25 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; padding: 15px; text-align: center; margin: 0; }
         .card { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); max-width: 400px; margin: auto; overflow: hidden; }
         
-        /* 醒目的金額顯示區塊 */
-        .info-bar { 
-            background: #2c3e50; 
-            color: #f1c40f; 
-            padding: 20px 10px; 
-            border-radius: 15px; 
-            margin-bottom: 20px; 
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
-        }
+        .info-bar { background: #2c3e50; color: #f1c40f; padding: 20px 10px; border-radius: 15px; margin-bottom: 20px; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
         .info-label { font-size: 18px; color: #ecf0f1; margin-bottom: 5px; }
-        .info-price { 
-            font-size: 42px; 
-            font-weight: 900; 
-            text-shadow: 0 0 15px rgba(241, 196, 15, 0.5); 
-            animation: pulse 1.5s infinite;
-        }
+        .info-price { font-size: 42px; font-weight: 900; text-shadow: 0 0 15px rgba(241, 196, 15, 0.5); animation: pulse 1.5s infinite; }
         
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
 
         input { width: 100%; padding: 15px; font-size: 18px; border: 2px solid #ddd; border-radius: 12px; box-sizing: border-box; margin-bottom: 20px; text-align: center; }
-
         .b-call { width: 100%; padding: 20px; font-size: 26px; background: #3498db; color: white; border: none; border-radius: 15px; cursor: pointer; font-weight: bold; margin-bottom: 15px; box-shadow: 0 6px #2980b9; transition: 0.2s; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         button.b-add { padding: 18px; font-size: 20px; border: none; border-radius: 12px; color: white; cursor: pointer; background: #27ae60; font-weight: bold; box-shadow: 0 4px #219150; transition: 0.2s; }
         .b-quit { background: #95a5a6; grid-column: span 2; margin-top: 15px; padding: 12px; color: white; border: none; border-radius: 10px; }
-
         .btn-locked { background: #bdc3c7 !important; box-shadow: none !important; opacity: 0.5; pointer-events: none !important; }
         
-        #resultOverlay {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 999; flex-direction: column; justify-content: center; align-items: center;
-            color: white; font-weight: bold; padding: 20px; box-sizing: border-box;
-        }
+        #resultOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 999; flex-direction: column; justify-content: center; align-items: center; color: white; font-weight: bold; padding: 20px; box-sizing: border-box; }
         .win-bg { background: linear-gradient(135deg, #f1c40f, #e67e22); animation: flash 0.5s infinite alternate; }
         .lose-bg { background: linear-gradient(135deg, #2c3e50, #000); }
         .result-title { font-size: 40px; margin-bottom: 10px; }
         .result-price { font-size: 60px; color: #fff; margin: 20px 0; }
         .result-btn { background: white; color: #333; padding: 15px 40px; border-radius: 30px; border: none; font-size: 18px; margin-top: 30px; }
-
         @keyframes flash { from { opacity: 0.9; } to { opacity: 1; } }
     </style>
 </head>
@@ -60,12 +36,10 @@
 
 <div class="card" id="mainCard">
     <div class="info-bar">
-        <div id="infoLabel" class="info-label">🏆 起標價</div>
+        <div id="infoLabel" class="info-label">🏆 起標金額</div>
         <div id="infoPrice" class="info-price">$0</div>
     </div>
-    
     <input type="text" id="userName" placeholder="👤 請輸入您的姓名">
-    
     <div id="actions">
         <button id="btn-call" class="b-call btn-bid" onclick="bid(1)">喊價 (+1)</button>
         <div class="grid">
@@ -76,7 +50,6 @@
             <button id="btn-quit" class="b-quit" onclick="quitBid()">❌ 棄標 / 重設</button>
         </div>
     </div>
-    <div id="msg" style="margin-top:15px; font-weight:bold;"></div>
 </div>
 
 <div id="resultOverlay">
@@ -131,13 +104,8 @@
     function toggleLock(locked) {
         const buttons = document.querySelectorAll('.btn-bid, .b-quit');
         buttons.forEach(btn => {
-            if (locked) {
-                btn.classList.add('btn-locked');
-                btn.disabled = true;
-            } else {
-                btn.classList.remove('btn-locked');
-                btn.disabled = false;
-            }
+            if (locked) { btn.classList.add('btn-locked'); btn.disabled = true; } 
+            else { btn.classList.remove('btn-locked'); btn.disabled = false; }
         });
     }
 
@@ -165,7 +133,6 @@
         const sorted = Object.entries(bids).sort((a, b) => b[1] - a[1]);
         const winnerName = sorted.length > 0 ? sorted[0][0] : null;
         const finalPrice = sorted.length > 0 ? sorted[0][1] : 0;
-
         overlay.style.display = 'flex';
         if (winnerName && myName === winnerName) {
             overlay.className = 'win-bg';
@@ -180,9 +147,7 @@
         }
     }
 
-    function closeOverlay() {
-        document.getElementById('resultOverlay').style.display = 'none';
-    }
+    function closeOverlay() { document.getElementById('resultOverlay').style.display = 'none'; }
 
     function bid(amt) {
         if (isAuctionClosed) return;
@@ -194,7 +159,16 @@
         db.child('bids').child(name).transaction((curr) => {
             if (isAuctionClosed) return; 
             const hasAnyBid = Object.keys(bidsList).length > 0;
-            return (!hasAnyBid) ? (currentStartPrice + amt) : ((curr || 0) + amt);
+            
+            // 關鍵修正：如果是第一個投標者，不論點擊多少金額，回傳起標價
+            if (!hasAnyBid) {
+                return currentStartPrice;
+            } else {
+                // 如果已有出價，則在最高價基礎上疊加
+                const maxBid = Math.max(...Object.values(bidsList));
+                const base = (curr || maxBid);
+                return base + amt;
+            }
         });
     }
 
