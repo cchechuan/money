@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>專業競標系統 - 音效與起標修正版</title>
+    <title>專業競標系統 - 多人決標大螢幕端</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -10,18 +10,22 @@
     
     <style>
         body { font-family: 'Microsoft JhengHei', sans-serif; background: #1a1a1a; color: white; text-align: center; margin: 0; overflow: hidden; }
-        .header { padding: 20px; background: #c0392b; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
-        .price-tag { font-size: 110px; color: #f1c40f; margin: 10px 0; font-weight: bold; text-shadow: 0 0 30px rgba(241, 196, 15, 0.8); }
-        .winner-announcement { display: none; font-size: 70px; color: #2ecc71; animation: celebrate 0.5s infinite alternate; z-index: 100; position: relative; }
-        @keyframes celebrate { from { transform: scale(1); } to { transform: scale(1.1); } }
-        .main-layout { display: flex; justify-content: space-around; padding: 20px 40px; }
+        .header { padding: 15px; background: #c0392b; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+        .price-tag { font-size: 90px; color: #f1c40f; margin: 5px 0; font-weight: bold; text-shadow: 0 0 30px rgba(241, 196, 15, 0.8); }
+        .winner-announcement { display: none; font-size: 50px; color: #2ecc71; animation: celebrate 0.5s infinite alternate; z-index: 100; position: relative; }
+        @keyframes celebrate { from { transform: scale(1); } to { transform: scale(1.05); } }
+        
+        .main-layout { display: flex; justify-content: space-around; padding: 10px 40px; height: 60vh; align-items: center; }
         #qrcode-container { background: white; padding: 15px; border-radius: 15px; width: 180px; }
-        #leaderboard { width: 50%; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 20px; }
-        .bid-row { display: flex; justify-content: space-between; font-size: 32px; padding: 12px; border-bottom: 1px solid #333; }
-        .rank-1 { background: #f1c40f; color: black; border-radius: 10px; font-weight: bold; }
-        .admin-panel { position: fixed; bottom: 0; width: 100%; background: #333; padding: 15px; display: flex; justify-content: center; align-items: center; gap: 15px; border-top: 2px solid #444; }
-        input { padding: 10px; font-size: 16px; width: 120px; border-radius: 5px; border: none; text-align: center; font-weight: bold; }
-        .admin-btn { padding: 10px 20px; font-size: 16px; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; }
+        
+        /* 排行榜優化為可容納 10 名 */
+        #leaderboard { width: 55%; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 15px; height: 90%; overflow-y: auto; }
+        .bid-row { display: flex; justify-content: space-between; font-size: 24px; padding: 8px 15px; border-bottom: 1px solid #333; align-items: center; }
+        .rank-win { background: #f1c40f; color: black; border-radius: 10px; font-weight: bold; }
+
+        .admin-panel { position: fixed; bottom: 0; width: 100%; background: #333; padding: 15px; display: flex; justify-content: center; align-items: center; gap: 12px; border-top: 2px solid #444; flex-wrap: wrap; }
+        input { padding: 8px; font-size: 16px; width: 90px; border-radius: 5px; border: none; text-align: center; font-weight: bold; }
+        .admin-btn { padding: 10px 18px; font-size: 16px; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; }
         .btn-mute { background: #7f8c8d; }
         .btn-new { background: #3498db; }
         .btn-end { background: #e74c3c; }
@@ -30,22 +34,16 @@
 </head>
 <body onclick="initAudio()">
 
-<audio id="bgm" loop preload="auto">
-    <source src="https://actions.google.com/音效/music/electronic_rock.mp3" type="audio/mpeg">
-    <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
-</audio>
-<audio id="cheer" preload="auto">
-    <source src="https://actions.google.com/音效/human/cheer_large_crowd.mp3" type="audio/mpeg">
-    <source src="https://assets.mixkit.co/sfx/preview/mixkit-stadium-crowd-light-applause-482.mp3" type="audio/mpeg">
-</audio>
+<audio id="bgm" loop preload="auto"><source src="https://actions.google.com/音效/music/electronic_rock.mp3" type="audio/mpeg"></audio>
+<audio id="cheer" preload="auto"><source src="https://actions.google.com/音效/human/cheer_large_crowd.mp3" type="audio/mpeg"></audio>
 
-<div class="header"><h1>現場即時競標</h1></div>
+<div class="header"><h1>現場即時競標 (多得標者模式)</h1></div>
 
 <div style="margin-top:10px;">
-    <div id="statusText" style="font-size: 24px; color: #bdc3c7;">目前最高標</div>
+    <div id="statusText" style="font-size: 22px; color: #bdc3c7;">目前最高出價</div>
     <div class="price-tag" id="mainPrice">$0</div>
-    <div id="mainUser" style="font-size: 40px; color: #f1c40f;">等待出價中...</div>
-    <div id="winnerMsg" class="winner-announcement">🎊 恭喜得標！ 🎊</div>
+    <div id="mainUser" style="font-size: 32px; color: #f1c40f;">等待出價中...</div>
+    <div id="winnerMsg" class="winner-announcement">🎊 恭喜以上得標者！ 🎊</div>
 </div>
 
 <div class="main-layout">
@@ -59,9 +57,10 @@
 
 <div class="admin-panel">
     <button id="muteBtn" class="admin-btn btn-mute" onclick="toggleMute()">🔊 音樂開啟</button>
-    <span>| 設定起標價：$</span>
-    <input type="number" id="basePriceInput" value="0" placeholder="請輸入金額">
-    <button class="admin-btn btn-new" onclick="startNewAuction()">🔄 開始新競標</button>
+    <span>| 起標價：$</span>
+    <input type="number" id="basePriceInput" value="0">
+    <span>| 得標人數：</span>
+    <input type="number" id="winnerCountInput" value="1" min="1"> <button class="admin-btn btn-new" onclick="startNewAuction()">🔄 開始新競標</button>
     <button class="admin-btn btn-end" onclick="finishAuction()">🔨 決標 (成交)</button>
 </div>
 
@@ -95,12 +94,9 @@
         const btn = document.getElementById('muteBtn');
         const bgm = document.getElementById('bgm');
         if (isMuted) {
-            btn.innerText = "🔇 音樂靜音";
-            btn.classList.add('is-muted');
-            bgm.pause();
+            btn.innerText = "🔇 音樂靜音"; btn.classList.add('is-muted'); bgm.pause();
         } else {
-            btn.innerText = "🔊 音樂開啟";
-            btn.classList.remove('is-muted');
+            btn.innerText = "🔊 音樂開啟"; btn.classList.remove('is-muted');
             db.child('status').once('value', s => { if(s.val() === 'open') bgm.play(); });
         }
     }
@@ -120,9 +116,18 @@
         const data = snapshot.val() || {};
         const bids = data.bids || {};
         const status = data.status || 'open';
-        const sorted = Object.entries(bids).sort((a, b) => b[1] - a[1]);
+        const limitWinners = data.winnerCount || 1;
+
+        // 核心排序邏輯修正：金額高到低 -> 金額相同比時間（時間戳記小優先）
+        const sorted = Object.entries(bids).sort((a, b) => {
+            if (b[1].amount !== a[1].amount) {
+                return b[1].amount - a[1].amount; // 金額大優先
+            }
+            return a[1].time - b[1].time; // 時間早優先
+        });
 
         document.getElementById('startPriceDisplay').innerText = "起標價: $" + (data.startPrice || 0);
+        document.getElementById('winnerCountInput').value = limitWinners;
 
         if (status === 'closed') {
             document.getElementById('winnerMsg').style.display = 'block';
@@ -132,22 +137,27 @@
             document.getElementById('winnerMsg').style.display = 'none';
         }
 
-        if (sorted.length > 0 && status === 'open') {
-            document.getElementById('mainPrice').innerText = "$" + sorted[0][1];
-            document.getElementById('mainUser').innerText = sorted[0][0];
-            if (!isMuted && audioInitialized) document.getElementById('bgm').play();
-        } else if (sorted.length === 0) {
+        if (sorted.length > 0) {
+            document.getElementById('mainPrice').innerText = "$" + sorted[0][1].amount;
+            document.getElementById('mainUser').innerText = "最高領先者: " + sorted[0][0];
+            if (status === 'open' && !isMuted && audioInitialized) document.getElementById('bgm').play();
+        } else {
             document.getElementById('mainPrice').innerText = "$0";
             document.getElementById('mainUser').innerText = "等待出價中...";
         }
 
+        // 渲染前 10 名排行榜
         const listDiv = document.getElementById('list');
-        listDiv.innerHTML = sorted.slice(0, 5).map((item, index) => `
-            <div class="bid-row ${index === 0 ? 'rank-1' : ''}">
-                <span>${index + 1}. ${item[0]}</span>
-                <span>$${item[1]}</span>
-            </div>
-        `).join('');
+        listDiv.innerHTML = sorted.slice(0, 10).map((item, index) => {
+            // 只要名次在設定的決標人數內，就套用黃色得標樣式
+            const isWinningNow = index < limitWinners;
+            return `
+                <div class="bid-row ${isWinningNow ? 'rank-win' : ''}">
+                    <span>${index + 1}. ${item[0]} ${isWinningNow ? '👑 (準得標)' : ''}</span>
+                    <span>$${item[1].amount}</span>
+                </div>
+            `;
+        }).join('');
     });
 
     const currentUrl = window.location.href.split('?')[0].split('#')[0];
@@ -155,10 +165,11 @@
     new QRCode(document.getElementById("qrcode"), { text: phoneUrl, width: 180, height: 180 });
 
     function startNewAuction() {
-        initAudio(); // 每次點擊開始時嘗試再次激活音效
+        initAudio();
         const price = parseInt(document.getElementById('basePriceInput').value) || 0;
-        if(confirm("確定重啟競標？起標價將設為 $" + price)) {
-            db.set({ status: 'open', bids: {}, startPrice: price });
+        const wCount = parseInt(document.getElementById('winnerCountInput').value) || 1;
+        if(confirm(`確定重啟競標？\n起標價：$${price}\n得標人數設定：${wCount} 人`)) {
+            db.set({ status: 'open', bids: {}, startPrice: price, winnerCount: wCount });
             const bgm = document.getElementById('bgm');
             bgm.currentTime = 0;
             if(!isMuted && audioInitialized) bgm.play();
