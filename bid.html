@@ -13,7 +13,6 @@
         .info-bar { background: #2c3e50; color: #f1c40f; padding: 20px 10px; border-radius: 15px; margin-bottom: 20px; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
         .info-label { font-size: 18px; color: #ecf0f1; margin-bottom: 5px; }
         .info-price { font-size: 42px; font-weight: 900; text-shadow: 0 0 15px rgba(241, 196, 15, 0.5); animation: pulse 1.5s infinite; }
-        
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
 
         input { width: 100%; padding: 15px; font-size: 18px; border: 2px solid #ddd; border-radius: 12px; box-sizing: border-box; margin-bottom: 20px; text-align: center; }
@@ -27,7 +26,7 @@
         .win-bg { background: linear-gradient(135deg, #f1c40f, #e67e22); animation: flash 0.5s infinite alternate; }
         .lose-bg { background: linear-gradient(135deg, #2c3e50, #000); }
         .result-title { font-size: 40px; margin-bottom: 10px; }
-        .result-price { font-size: 60px; color: #fff; margin: 20px 0; }
+        .result-price { font-size: 50px; color: #fff; margin: 20px 0; }
         .result-btn { background: white; color: #333; padding: 15px 40px; border-radius: 30px; border: none; font-size: 18px; margin-top: 30px; }
         @keyframes flash { from { opacity: 0.9; } to { opacity: 1; } }
     </style>
@@ -87,12 +86,13 @@
         currentStartPrice = data.startPrice || 0;
         bidsList = data.bids || {};
         const status = data.status || 'open';
+        const limitWinners = data.winnerCount || 1;
         const myName = document.getElementById('userName').value.trim();
 
         if (status === 'closed') {
             isAuctionClosed = true;
             toggleLock(true);
-            showResult(myName, bidsList);
+            showResult(myName, bidsList, limitWinners);
         } else {
             isAuctionClosed = false;
             toggleLock(false);
@@ -115,35 +115,40 @@
         const price = document.getElementById('infoPrice');
         
         if (!hasAnyBid) {
-            label.innerText = "🏆 起標金額";
-            label.style.color = "#ecf0f1";
-            price.innerText = "$" + currentStartPrice;
-            price.style.color = "#f1c40f";
+            label.innerText = "🏆 起標金額"; label.style.color = "#ecf0f1";
+            price.innerText = "$" + currentStartPrice; price.style.color = "#f1c40f";
         } else {
-            const maxBid = Math.max(...Object.values(bidsList));
-            label.innerText = "🔥 目前最高價";
-            label.style.color = "#ff7675";
-            price.innerText = "$" + maxBid;
-            price.style.color = "#fab1a0";
+            const maxBid = Math.max(...Object.values(bidsList).map(b => b.amount));
+            label.innerText = "🔥 目前最高價"; label.style.color = "#ff7675";
+            price.innerText = "$" + maxBid; price.style.color = "#fab1a0";
         }
     }
 
-    function showResult(myName, bids) {
+    function showResult(myName, bids, limitWinners) {
         const overlay = document.getElementById('resultOverlay');
-        const sorted = Object.entries(bids).sort((a, b) => b[1] - a[1]);
-        const winnerName = sorted.length > 0 ? sorted[0][0] : null;
-        const finalPrice = sorted.length > 0 ? sorted[0][1] : 0;
+        
+        // 排序：金額高到低 -> 時間早優先
+        const sorted = Object.entries(bids).sort((a, b) => {
+            if (b[1].amount !== a[1].amount) return b[1].amount - a[1].amount;
+            return a[1].time - b[1].time;
+        });
+
+        // 找出得標名單（前 N 名）
+        const winningRank = sorted.findIndex(item => item[0] === myName);
+        const isIWin = winningRank !== -1 && winningRank < limitWinners;
+        const myFinalPrice = (winningRank !== -1) ? sorted[winningRank][1].amount : 0;
+
         overlay.style.display = 'flex';
-        if (winnerName && myName === winnerName) {
+        if (isIWin) {
             overlay.className = 'win-bg';
             document.getElementById('resTitle').innerText = "🎊 恭喜得標！";
-            document.getElementById('resSub').innerText = "您是最終得標者";
-            document.getElementById('resPrice').innerText = "$" + finalPrice;
+            document.getElementById('resSub').innerText = `您獲得第 ${winningRank + 1} 名得標席位`;
+            document.getElementById('resPrice').innerText = "$" + myFinalPrice;
         } else {
             overlay.className = 'lose-bg';
             document.getElementById('resTitle').innerText = "🔨 競標結束";
-            document.getElementById('resSub').innerText = winnerName ? "得標者：" + winnerName : "本次未成交";
-            document.getElementById('resPrice').innerText = winnerName ? "成交價 $" + finalPrice : "";
+            document.getElementById('resSub').innerText = myName ? "很抱歉，您未進入前 " + limitWinners + " 名" : "競標結束";
+            document.getElementById('resPrice').innerText = myName && winningRank !== -1 ? "您的出價 $" + myFinalPrice : "";
         }
     }
 
@@ -159,15 +164,16 @@
         db.child('bids').child(name).transaction((curr) => {
             if (isAuctionClosed) return; 
             const hasAnyBid = Object.keys(bidsList).length > 0;
+            const nowTimestamp = Date.now(); // 取得當前精準時間戳記
             
-            // 關鍵修正：如果是第一個投標者，不論點擊多少金額，回傳起標價
             if (!hasAnyBid) {
-                return currentStartPrice;
+                // 第一個出價者：強制為起標價
+                return { amount: currentStartPrice, time: nowTimestamp };
             } else {
-                // 如果已有出價，則在最高價基礎上疊加
-                const maxBid = Math.max(...Object.values(bidsList));
-                const base = (curr || maxBid);
-                return base + amt;
+                // 已有出價：在最高價基礎上疊加
+                const maxBid = Math.max(...Object.values(bidsList).map(b => b.amount));
+                const currentAmount = curr ? curr.amount : maxBid;
+                return { amount: currentAmount + amt, time: nowTimestamp };
             }
         });
     }
