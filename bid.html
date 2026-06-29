@@ -118,7 +118,6 @@
             label.innerText = "🏆 起標金額"; label.style.color = "#ecf0f1";
             price.innerText = "$" + currentStartPrice; price.style.color = "#f1c40f";
         } else {
-            // 從包含 amount 的物件結構中正確找出最高金額
             const maxBid = Math.max(...Object.values(bidsList).map(b => b.amount || 0));
             label.innerText = "🔥 目前最高價"; label.style.color = "#ff7675";
             price.innerText = "$" + maxBid; price.style.color = "#fab1a0";
@@ -128,13 +127,11 @@
     function showResult(myName, bids, limitWinners) {
         const overlay = document.getElementById('resultOverlay');
         
-        // 排序：金額高到低 -> 金額相同比時間（時間戳記小的先到優先）
         const sorted = Object.entries(bids).sort((a, b) => {
             if (b[1].amount !== a[1].amount) return b[1].amount - a[1].amount;
             return a[1].time - b[1].time;
         });
 
-        // 找出自己的即時名次與得標狀態
         const winningRank = sorted.findIndex(item => item[0] === myName);
         const isIWin = winningRank !== -1 && winningRank < limitWinners;
         const myFinalPrice = (winningRank !== -1) ? sorted[winningRank][1].amount : 0;
@@ -162,33 +159,29 @@
         if (!name) return alert("請輸入姓名！");
         sessionStorage.setItem('auction_user_name', name);
 
-        // 1. 檢查目前是否已有任何出價紀錄
         const hasAnyBid = Object.keys(bidsList).length > 0;
-        const nowTimestamp = Date.now(); // 取得當前高精準時間
+        const nowTimestamp = Date.now();
         let targetAmount = 0;
 
         if (!hasAnyBid) {
-            // 情境 A：你是第一個投標者 -> 強制為起標價
             targetAmount = currentStartPrice;
         } else {
-            // 情境 B：已經有人出價 -> 找出目前所有人裡面的最高價
             const maxBid = Math.max(...Object.values(bidsList).map(b => b.amount || 0));
-            
-            // 檢查自己先前是否有出過價
             if (bidsList[name] && bidsList[name].amount) {
-                // 如果自己原本就有出價，就在自己的基礎上加價
                 targetAmount = bidsList[name].amount + amt;
             } else {
-                // 如果自己是新加入的競爭者，就在目前最高價的基礎上加價
                 targetAmount = maxBid + amt;
             }
         }
 
-        // 2. 採用安全直接的 set 寫入，解決 transaction 在 null/物件間轉換的死鎖問題
-        db.child('bids').child(name).set({
+        // 升級改用相容性最高的 update 進行局部路徑更新，防止被安全規則阻擋
+        const updateData = {};
+        updateData[name] = {
             amount: targetAmount,
             time: nowTimestamp
-        }).catch(err => {
+        };
+
+        db.child('bids').update(updateData).catch(err => {
             alert("出價失敗，請重試！錯誤訊息：" + err.message);
         });
     }
